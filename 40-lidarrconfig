@@ -1,0 +1,48 @@
+#!/usr/bin/with-contenv bash
+
+# If config doesn't exist yet, start lidarr for 60 seconds to build config, then stop.
+if ! [ -f /config/lidarr.db ]; then
+      timeout 60 /etc/services.d/lidarr/run
+fi
+
+#Set urlbase settings
+xq --xml-output '.Config.UrlBase = "/lidarr"' /config/config.xml | sponge /config/config.xml
+
+while [ ! -f /sabnzbdconfig/sabnzbd.ini ]; do
+	sleep 1
+	echo "Waiting for sabnzbd config to be ready"
+done
+
+sleep 5
+
+#Get SABnzbd apikey
+sabAPI=$(cat /sabnzbdconfig/sabnzbd.ini | grep -m1 "api_key = ................................" | cut -d, -f2 | grep "api_key = ................................" | cut -d ' ' -f3)
+
+# NZBtoMedia doesn't seem to work with lidarr, disabling this. 
+#Set up nzbtomedia
+#while [ ! -f /nzbtomedia/autoProcessMedia.cfg ]; do
+#      sleep 1
+#      echo "Waiting for nzbtomedia volume to be ready"
+#done
+
+#lidarrAPI=$(xq '.Config.ApiKey' /config/config.xml | cut -d "\"" -f2)
+
+# Set Sickrage host
+#php /phpsed.php "/\[Lidarr\].*?\[\[music\]\].*?host =\K.*?$/sm" " lidarr" /nzbtomedia/autoProcessMedia.cfg
+
+# Enable Lidarr support
+#php /phpsed.php "/\[Lidarr\].*?\[\[music\]\].*?enabled =\K.*?$/sm" " 0" /nzbtomedia/autoProcessMedia.cfg
+#php /phpsed.php "/\[Lidarr\].*?\[\[music\]\].*?web_root =\K.*?$/sm" " /lidarr" /nzbtomedia/autoProcessMedia.cfg
+#php /phpsed.php "/\[Lidarr\].*?\[\[music\]\].*?apikey =\K.*?$/sm" " $lidarrAPI" /nzbtomedia/autoProcessMedia.cfg
+
+# Delete failed, ignored, set link mode
+
+#php /phpsed.php "/\[Lidarr\].*?\[\[music\]\].*?delete_failed =\K.*?$/sm" " 1" /nzbtomedia/autoProcessMedia.cfg
+#php /phpsed.php "/\[Lidarr\].*?\[\[music\]\].*?delete_ignored =\K.*?$/sm" " 1" /nzbtomedia/autoProcessMedia.cfg
+#php /phpsed.php "/\[Lidarr\].*?\[\[music\]\].*?delete_on =\K.*?$/sm" " 0" /nzbtomedia/autoProcessMedia.cfg
+#php /phpsed.php "/\[Lidarr\].*?\[\[music\]\].*?Torrent_NoLink =\K.*?$/sm" " 1" /nzbtomedia/autoProcessMedia.cfg
+#php /phpsed.php "/\[Lidarr\].*?\[\[music\]\].*?process_method =\K.*?$/sm" " move" /nzbtomedia/autoProcessMedia.cfg
+
+#Add Sabnzbd, transmission connection
+echo -e "INSERT INTO DownloadClients (Id, Enable, Name, Implementation, Settings, ConfigContract) VALUES (1, 1, 'sabnzbd', 'Sabnzbd', '{\n  \"host\": \"sabnzbd\",\n  \"port\": 8080,\n  \"apiKey\": \"$sabAPI\",\n  \"musicCategory\": \"music\",\n  \"recentTvPriority\": -100,\n  \"olderTvPriority\": -100,\n  \"useSsl\": false\n}', 'SabnzbdSettings');" | sqlite3 /config/lidarr.db
+echo -e "INSERT INTO DownloadClients (Id, Enable, Name, Implementation, Settings, ConfigContract) VALUES (2, 1, 'Transmission', 'Transmission', '{\n  \"host\": \"transmission\",\n  \"port\": 9091,\n  \"urlBase\": \"/transmission/\",\n  \"musicCategory\": \"music\",\n  \"recentTvPriority\": 0,\n  \"olderTvPriority\": 0,\n  \"addPaused\": false,\n  \"useSsl\": false\n}', 'TransmissionSettings');" | sqlite3 /config/lidarr.db
